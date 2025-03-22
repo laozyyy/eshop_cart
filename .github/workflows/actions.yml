@@ -1,0 +1,68 @@
+name: Deployment
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 设置 Docker Buildx
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Docker Login
+        uses: docker/login-action@v3.1.0
+        with:
+          username: zym1614511838@gmail.com
+          password: zhongyiming2003
+
+      - name: 连接阿里云
+        run: |
+          # 登录阿里云
+          docker login -u aliyun2526497059 -p zhongyiming2003 registry.cn-hangzhou.aliyuncs.com
+
+      
+
+      # 使用 Buildx 构建镜像并缓存层
+      - name: 构建镜像
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: registry.cn-hangzhou.aliyuncs.com/lazyyy1/eshop_cart
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache,mode=max
+      # 缓存 Docker 层
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-layers
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+  deployment:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: 更新服务器
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: 117.72.72.114
+          username: root
+          password: F1ly6kT?
+          port: 22
+          script: |
+            docker stop eshop_cart || true
+            docker rm eshop_cart || true
+            docker login -u aliyun2526497059 -p zhongyiming2003 registry.cn-hangzhou.aliyuncs.com
+            docker pull registry.cn-hangzhou.aliyuncs.com/lazyyy1/eshop_cart:latest
+            docker run -d --name eshop_cart -p 20001:8888 --network 47bce5c74f589f4867dbd57e9ca9f808_env-network registry.cn-hangzhou.aliyuncs.com/lazyyy1/eshop_cart:latest
