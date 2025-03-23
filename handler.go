@@ -31,7 +31,7 @@ func (c CartServiceImpl) AddItem(ctx context.Context, req *cart.AddItemRequest) 
 	}
 	if exists == 1 {
 		// 2. 缓存存在则更新数量
-		err := cache.Client.HSet(ctx, key, sku, int64(quantity)).Err()
+		err := cache.Client.HIncrBy(ctx, key, sku, int64(quantity)).Err()
 		if err != nil {
 			log.Errorf("获取缓存错误，error: %v", err)
 			errStr := "服务器内部错误"
@@ -64,7 +64,7 @@ func (c CartServiceImpl) AddItem(ctx context.Context, req *cart.AddItemRequest) 
 		for _, item := range cartItems {
 			var err error
 			if item.Sku == sku {
-				err = cache.Client.HSet(ctx, key, item.Sku, quantity).Err()
+				err = cache.Client.HSet(ctx, key, item.Sku, item.Quantity+quantity).Err()
 			} else {
 				err = cache.Client.HSet(ctx, key, item.Sku, item.Quantity).Err()
 			}
@@ -85,7 +85,7 @@ func (c CartServiceImpl) AddItem(ctx context.Context, req *cart.AddItemRequest) 
 	}
 
 	// 5. 数据库不存在，插入新商品到缓存
-	if err := cache.Client.HSet(ctx, key, sku, quantity).Err(); err != nil {
+	if err := cache.Client.HIncrBy(ctx, key, sku, int64(quantity)).Err(); err != nil {
 		log.Errorf("内部错误，err: %v", err)
 		errStr := "服务器内部错误"
 		return &cart.BaseResponse{
