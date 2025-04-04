@@ -5,6 +5,7 @@ import "time"
 type CartItem struct {
 	Sku      string
 	Quantity int32
+	Selected bool
 }
 
 type Cart struct {

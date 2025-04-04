@@ -55,3 +55,13 @@ func InsertOrUpdateCart(db *gorm.DB, cart []byte, uid string) error {
 	}
 	return err
 }
+
+func DeleteAllCart(db *gorm.DB, uid string) error {
+	db = getDBInstance(db)
+	err := db.Table("cart").Where("uid = ?", uid).Delete(&model.Cart{}).Error
+	if err != nil {
+		log.Errorf("err: %v", err)
+		return err
+	}
+	return nil
+}

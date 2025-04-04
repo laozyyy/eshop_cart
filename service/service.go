@@ -6,16 +6,15 @@ import (
 	"eshop_cart/database"
 	"eshop_cart/log"
 	"eshop_cart/model"
-	"fmt"
+	"eshop_cart/util"
 	"github.com/bytedance/sonic"
 	"strconv"
 )
 
-func UpdateCart() {
+func UpdateCart(uid string) {
 	ctx := context.Background()
-	uid := "930fbafc-f9ed-458f-a1cf-768d65f8825e"
-	key := fmt.Sprintf("cart:{%s}", uid)
-	result, err := cache.Client.HGetAll(ctx, key).Result()
+	result, err := cache.Client.HGetAll(ctx, util.GetKey(uid)).Result()
+	result2, err := cache.Client.HGetAll(ctx, util.GetKeySelect(uid)).Result()
 	if err != nil {
 		log.Errorf("err: %v", err)
 	}
@@ -25,6 +24,7 @@ func UpdateCart() {
 		item := model.CartItem{
 			Sku:      sku,
 			Quantity: int32(num),
+			Selected: result2[sku] == "true",
 		}
 		items = append(items, item)
 	}

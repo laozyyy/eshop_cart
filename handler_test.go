@@ -4,7 +4,6 @@ import (
 	"context"
 	"eshop_cart/kitex_gen/eshop/cart"
 	"eshop_cart/log"
-	"eshop_cart/service"
 	"fmt"
 	"testing"
 )
@@ -21,7 +20,7 @@ func TestCartServiceImpl_AddItem(t *testing.T) {
 			args: args{
 				ctx: context.Background(),
 				req: &cart.AddItemRequest{
-					SkuId:    "12345",
+					SkuId:    "261311",
 					Quantity: 1342,
 					Uid:      "930fbafc-f9ed-458f-a1cf-768d65f8825e",
 				},
@@ -58,7 +57,6 @@ func TestCartServiceImpl_AddItem(t *testing.T) {
 
 		})
 	}
-	service.UpdateCart()
 }
 
 func TestCartServiceImpl_GetList(t *testing.T) {
@@ -93,5 +91,72 @@ func TestCartServiceImpl_GetList(t *testing.T) {
 			}
 		})
 	}
-	service.UpdateCart()
+	//service.UpdateCart()
+}
+func TestUpdateSelectd(t *testing.T) {
+	b := false
+	var q int32 = 100
+	type args struct {
+		ctx context.Context
+		req *cart.UpdateRequest
+	}
+	tests := []struct {
+		args args
+	}{
+		{
+			args: args{
+				ctx: context.Background(),
+
+				req: &cart.UpdateRequest{
+					Quantity: &q,
+					Selected: &b,
+					SkuId:    "261311",
+					Uid:      "930fbafc-f9ed-458f-a1cf-768d65f8825e",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run("1", func(t *testing.T) {
+			c := CartServiceImpl{}
+			res, err := c.UpdateItem(tt.args.ctx, tt.args.req)
+			if err != nil {
+				log.Errorf("err: %v", err)
+			}
+			p := res.Price
+			log.Errorf("%s", p)
+		})
+	}
+	//service.UpdateCart()
+}
+func TestDelete(t *testing.T) {
+	type args struct {
+		ctx context.Context
+		req *cart.DeleteRequest
+	}
+	tests := []struct {
+		args args
+	}{
+		{
+			args: args{
+				ctx: context.Background(),
+
+				req: &cart.DeleteRequest{
+					Skus: []string{"1234345"},
+					Uid:  "930fbafc-f9ed-458f-a1cf-768d65f8825e",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run("1", func(t *testing.T) {
+			c := CartServiceImpl{}
+			res, err := c.DeleteItem(tt.args.ctx, tt.args.req)
+			if err != nil {
+				log.Errorf("err: %v", err)
+				log.Errorf("res: %+v", res)
+			}
+		})
+	}
+	select {}
 }
