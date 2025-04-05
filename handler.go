@@ -8,9 +8,11 @@ import (
 	"eshop_cart/database"
 	"eshop_cart/kitex_gen/eshop/cart"
 	"eshop_cart/log"
+	"eshop_cart/model"
 	"eshop_cart/mq"
 	"eshop_cart/rpc"
 	"eshop_cart/util"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -148,6 +150,7 @@ func (c CartServiceImpl) GetList(ctx context.Context, req *cart.PageRequest) (r 
 			}
 			items = append(items, &item)
 		}
+		sort.Sort(model.BySku(items))
 		price := computePrice(ctx, items)
 		var str = "success"
 		return &cart.PageResponse{
