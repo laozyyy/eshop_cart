@@ -46,7 +46,7 @@ func (c CartServiceImpl) AddItem(ctx context.Context, req *cart.AddItemRequest) 
 	}
 
 	//3. 查询并回填缓存
-	ok, err := GetFromDBAndCacheCart(ctx, uid, key, keySelect)
+	ok, err := GetFromDBAndCacheCart(ctx, uid)
 	if err != nil {
 		log.Errorf("内部错误，err: %v", err)
 		errStr := "服务器内部错误"
@@ -80,8 +80,17 @@ func (c CartServiceImpl) AddItem(ctx context.Context, req *cart.AddItemRequest) 
 	}, nil
 }
 
-func GetFromDBAndCacheCart(ctx context.Context, uid string, key string, keySelect string) (bool, error) {
-	// 3. 不在缓存，查询数据库
+func GetFromDBAndCacheCart(ctx context.Context, uid string) (bool, error) {
+	exists, _ := isCacheExists(ctx, uid)
+	if exists {
+		return true, nil
+	}
+	// 不在缓存，查询数据库
+	key := util.GetKey(uid)
+	keySelect := util.GetKeySelect(uid)
+	keyPrice := util.GetKeyPrice(uid)
+	// 删除可能存在的的旧总价缓存
+	cache.Client.Del(ctx, keyPrice)
 	cartItems, err := database.GetCartByUid(nil, uid)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		log.Errorf("数据库错误，err: %v", err)
@@ -107,17 +116,21 @@ func GetFromDBAndCacheCart(ctx context.Context, uid string, key string, keySelec
 
 func (c CartServiceImpl) GetList(ctx context.Context, req *cart.PageRequest) (r *cart.PageResponse, err error) {
 	key := util.GetKey(req.Uid)
-	exists, err := cache.Client.Exists(ctx, key).Result()
+	keySelect := util.GetKeySelect(req.Uid)
+	//3. 查询并回填缓存
+	ok, err := GetFromDBAndCacheCart(ctx, req.Uid)
 	if err != nil {
-		log.Errorf("获取缓存错误，error: %v", err)
+		log.Errorf("内部错误，err: %v", err)
 		errStr := "服务器内部错误"
 		return &cart.PageResponse{
-			Info: &errStr,
+			Info:  &errStr,
+			Price: "",
 		}, err
 	}
-	if exists == 1 {
+	if ok {
 		// todo 分页逻辑
-		result, err := cache.Client.HGetAll(ctx, key).Result()
+		skus, err := cache.Client.HGetAll(ctx, key).Result()
+		skusSelect, err := cache.Client.HGetAll(ctx, keySelect).Result()
 		if err != nil {
 			log.Errorf("err: %v", err)
 			errStr := "服务器内部错误"
@@ -126,14 +139,16 @@ func (c CartServiceImpl) GetList(ctx context.Context, req *cart.PageRequest) (r 
 			}, err
 		}
 		var items []*cart.CartItem
-		for sku, q := range result {
+		for sku, q := range skus {
 			num, _ := strconv.ParseInt(q, 10, 32)
 			item := cart.CartItem{
 				Sku:      sku,
 				Quantity: int32(num),
+				Selected: skusSelect[sku] == "1",
 			}
 			items = append(items, &item)
 		}
+		price := computePrice(ctx, items)
 		var str = "success"
 		return &cart.PageResponse{
 			PageSize: req.PageSize,
@@ -141,44 +156,15 @@ func (c CartServiceImpl) GetList(ctx context.Context, req *cart.PageRequest) (r 
 			IsEnd:    false,
 			Items:    items,
 			Info:     &str,
+			Price:    strconv.FormatFloat(price, 'f', 2, 64),
 		}, nil
 	}
-
-	cartItems, err := database.GetCartByUid(nil, req.Uid)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Errorf("数据库错误，err: %v", err)
-		errStr := "服务器内部错误"
-		return &cart.PageResponse{
-			Info: &errStr,
-		}, nil
-	}
-	// 缓存到redis
-	for _, item := range cartItems {
-		var err error
-		err = cache.Client.HSet(ctx, key, item.Sku, item.Quantity).Err()
-		if err != nil {
-			log.Errorf("缓存回填失败: %v", err)
-			errStr := "服务器内部错误"
-			return &cart.PageResponse{
-				Info: &errStr,
-			}, nil
-		}
-	}
-	cache.Client.Expire(ctx, key, 24*time.Hour)
-	var items []*cart.CartItem
-	for _, item := range cartItems {
-		item := cart.CartItem{
-			Sku:      item.Sku,
-			Quantity: item.Quantity,
-		}
-		items = append(items, &item)
-	}
-	var str = "success"
+	str := "购物车无数据"
 	return &cart.PageResponse{
 		PageSize: req.PageSize,
 		PageNum:  req.PageNum,
 		IsEnd:    false,
-		Items:    items,
+		Items:    nil,
 		Info:     &str,
 	}, nil
 }
@@ -225,23 +211,25 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 			}
 			_ = cache.Client.Set(ctx, keyPrice, price, time.Hour*24).Err()
 		} else {
-			skus, _ := cache.Client.HGetAll(ctx, keySelect).Result()
-			skusWithQuantity, _ := cache.Client.HGetAll(ctx, key).Result()
-			for sku, selected := range skus {
-				if selected == "1" {
-					getPrice, err := rpc.GetPrice(ctx, sku)
-					q, _ := strconv.Atoi(skusWithQuantity[sku])
-					price += getPrice * float64(q)
-					if err != nil {
-						log.Errorf("内部错误，err: %v", err)
-					}
+			skusSelect, _ := cache.Client.HGetAll(ctx, keySelect).Result()
+			skus, _ := cache.Client.HGetAll(ctx, key).Result()
+			var items []*cart.CartItem
+			for sku, q := range skus {
+				num, _ := strconv.ParseInt(q, 10, 32)
+				item := cart.CartItem{
+					Sku:      sku,
+					Quantity: int32(num),
+					Selected: skusSelect[sku] == "1",
 				}
+				items = append(items, &item)
 			}
+			price = computePrice(ctx, items)
+
 			_ = cache.Client.Set(ctx, keyPrice, price, time.Hour*24).Err()
 		}
 	} else {
 		// 查询并回填缓存
-		ok, err := GetFromDBAndCacheCart(ctx, req.Uid, key, keySelect)
+		ok, err := GetFromDBAndCacheCart(ctx, req.Uid)
 		if err != nil || !ok {
 			log.Errorf("内部错误，err: %v", err)
 			errStr := "服务器内部错误"
@@ -278,6 +266,20 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 	//panic("")
 }
 
+func computePrice(ctx context.Context, items []*cart.CartItem) float64 {
+	var price float64
+	for _, item := range items {
+		if item.Selected {
+			getPrice, err := rpc.GetPrice(ctx, item.Sku)
+			if err != nil {
+				log.Errorf("内部错误，err: %v", err)
+			}
+			price += getPrice * float64(item.Quantity)
+		}
+	}
+	return price
+}
+
 func isCacheExists(ctx context.Context, key string) (bool, error) {
 	exists, err := cache.Client.Exists(ctx, key).Result()
 	if err != nil {
@@ -291,7 +293,7 @@ func (c CartServiceImpl) DeleteItem(ctx context.Context, req *cart.DeleteRequest
 	key := util.GetKey(req.Uid)
 	keySelect := util.GetKeySelect(req.Uid)
 	keyPrice := util.GetKeyPrice(req.Uid)
-	ok, err := GetFromDBAndCacheCart(ctx, req.Uid, key, keySelect)
+	ok, err := GetFromDBAndCacheCart(ctx, req.Uid)
 	if err != nil {
 		log.Errorf("内部错误，err: %v", err)
 		errStr := "内部错误"

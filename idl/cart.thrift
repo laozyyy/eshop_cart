@@ -45,6 +45,7 @@ struct UpdateRequest {
 struct CartItem {
     1: string sku,
     2: i32 quantity,
+    3: bool selected
 }
 
 struct PageResponse {
@@ -53,6 +54,7 @@ struct PageResponse {
     3: bool isEnd
     4: list<CartItem> items
     5: optional string info
+    6: string price
 }
 
 //kitex -module eshop_cart cart.thrift
