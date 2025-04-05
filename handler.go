@@ -180,6 +180,7 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 		// lastSelected 是这次要修改的 sku 之前的选中状态
 		lastSelected, _ := cache.Client.HGet(ctx, keySelect, req.SkuId).Result()
 		cache.Client.HSet(ctx, keySelect, req.SkuId, req.Selected)
+		cache.Client.HSet(ctx, key, req.SkuId, req.Quantity)
 		// 如果存在 cart 和 cart_price
 		if exists {
 			tmp, _ := cache.Client.Get(ctx, keyPrice).Result()
