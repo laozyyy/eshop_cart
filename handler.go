@@ -204,12 +204,24 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 				if err != nil {
 					log.Errorf("内部错误，err: %v", err)
 				}
+				log.Infof("fianl price: %f, quantity: %d", price, req.Quantity)
 			} else if lastSelected == "1" && !*req.Selected {
 				getPrice, err := rpc.GetPrice(ctx, req.SkuId)
 				price -= getPrice * float64(*req.Quantity)
 				if err != nil {
 					log.Errorf("内部错误，err: %v", err)
 				}
+				log.Infof("fianl price: %f, quantity: %d", price, req.Quantity)
+			} else if lastSelected == "1" && *req.Selected {
+				// 只有数量改变的情况
+				getPrice, err := rpc.GetPrice(ctx, req.SkuId)
+				if err != nil {
+					log.Errorf("内部错误，err: %v", err)
+				}
+				lastQuantity, _ := cache.Client.HGet(ctx, key, req.SkuId).Result()
+				lastQuantityInt, err := strconv.ParseInt(lastQuantity, 10, 64)
+				price += getPrice * float64(int64(*req.Quantity)-lastQuantityInt)
+				log.Infof("fianl price: %f, quantity: %d, lastQuantity: %d", price, req.Quantity, lastQuantityInt)
 			}
 			_ = cache.Client.Set(ctx, keyPrice, price, time.Hour*24).Err()
 		} else {
