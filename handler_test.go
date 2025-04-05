@@ -158,5 +158,5 @@ func TestDelete(t *testing.T) {
 			}
 		})
 	}
-	select {}
+	//select {}
 }
