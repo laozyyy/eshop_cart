@@ -179,6 +179,8 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 		exists, err = isCacheExists(ctx, keyPrice)
 		// lastSelected 是这次要修改的 sku 之前的选中状态
 		lastSelected, _ := cache.Client.HGet(ctx, keySelect, req.SkuId).Result()
+		lastQuantity, _ := cache.Client.HGet(ctx, key, req.SkuId).Result()
+		lastQuantityInt, _ := strconv.ParseInt(lastQuantity, 10, 64)
 		cache.Client.HSet(ctx, keySelect, req.SkuId, req.Selected)
 		cache.Client.HSet(ctx, key, req.SkuId, req.Quantity)
 		// 如果存在 cart 和 cart_price
@@ -205,10 +207,8 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 				if err != nil {
 					log.Errorf("内部错误，err: %v", err)
 				}
-				lastQuantity, _ := cache.Client.HGet(ctx, key, req.SkuId).Result()
-				lastQuantityInt, err := strconv.ParseInt(lastQuantity, 10, 64)
 				price += getPrice * float64(int64(*req.Quantity)-lastQuantityInt)
-				log.Infof("fianl price: %f, quantity: %d, lastQuantity: %d", price, req.Quantity, lastQuantityInt)
+				log.Infof("fianl price: %f, quantity: %d, lastQuantity: %d", price, *req.Quantity, lastQuantityInt)
 			}
 			_ = cache.Client.Set(ctx, keyPrice, price, time.Hour*24).Err()
 		} else {
