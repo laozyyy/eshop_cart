@@ -81,7 +81,7 @@ func (c CartServiceImpl) AddItem(ctx context.Context, req *cart.AddItemRequest) 
 }
 
 func GetFromDBAndCacheCart(ctx context.Context, uid string) (bool, error) {
-	exists, _ := isCacheExists(ctx, uid)
+	exists, _ := isCacheExists(ctx, util.GetKey(uid))
 	if exists {
 		return true, nil
 	}
@@ -259,6 +259,7 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 		}
 		_ = cache.Client.Set(ctx, keyPrice, price, time.Hour*24).Err()
 	}
+	go mq.SendSaveCartMessage(req.Uid)
 	return &cart.UpdateResponse{
 		Price:  strconv.FormatFloat(price, 'f', 2, 64),
 		Code:   0,
