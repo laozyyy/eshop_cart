@@ -190,14 +190,14 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 				if err != nil {
 					log.Errorf("内部错误，err: %v", err)
 				}
-				log.Infof("fianl price: %f, quantity: %d", price, req.Quantity)
+				log.Infof("fianl price: %f, quantity: %d", price, *req.Quantity)
 			} else if lastSelected == "1" && !*req.Selected {
 				getPrice, err := rpc.GetPrice(ctx, req.SkuId)
 				price -= getPrice * float64(*req.Quantity)
 				if err != nil {
 					log.Errorf("内部错误，err: %v", err)
 				}
-				log.Infof("fianl price: %f, quantity: %d", price, req.Quantity)
+				log.Infof("fianl price: %f, quantity: %d", price, *req.Quantity)
 			} else if lastSelected == "1" && *req.Selected {
 				// 只有数量改变的情况
 				getPrice, err := rpc.GetPrice(ctx, req.SkuId)
@@ -268,9 +268,12 @@ func (c CartServiceImpl) UpdateItem(ctx context.Context, req *cart.UpdateRequest
 
 func computePrice(ctx context.Context, items []*cart.CartItem) float64 {
 	var price float64
+	log.Infof("items: %+v", items)
 	for _, item := range items {
 		if item.Selected {
 			getPrice, err := rpc.GetPrice(ctx, item.Sku)
+			log.Infof("items: %v", getPrice)
+			log.Infof("items: %v", price)
 			if err != nil {
 				log.Errorf("内部错误，err: %v", err)
 			}
